@@ -199,81 +199,74 @@ Page({
     console.log('[AddMedication] handleSave:', form)
 
     if (!form.name || !form.name.trim()) {
-      wx.showToast({
-        title: '请输入药品名称',
-        icon: 'none'
-      })
+      wx.showToast({ title: '请输入药品名称', icon: 'none' })
       return
     }
-
     if (!form.dosage || !form.dosage.trim()) {
-      wx.showToast({
-        title: '请输入剂量',
-        icon: 'none'
-      })
+      wx.showToast({ title: '请输入剂量', icon: 'none' })
       return
     }
-
     if (!form.frequency) {
-      wx.showToast({
-        title: '请选择服用频率',
-        icon: 'none'
-      })
+      wx.showToast({ title: '请选择服用频率', icon: 'none' })
       return
     }
 
     wx.showLoading({ title: '保存中...' })
-    
+
     try {
-      const db = wx.cloud.database()
-      
       const medicationData = {
+        _id: this.data.isEdit ? this.data.editId : 'med_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
         name: form.name.trim(),
         dosage: form.dosage.trim(),
         frequency: form.frequency,
         frequencyIndex: form.frequencyIndex,
-        instruction: form.instruction || null,
-        startDate: form.startDate || null,
-        endDate: form.endDate || null,
+        instruction: form.instruction || '',
+        startDate: form.startDate || '',
+        endDate: form.endDate || '',
         totalQuantity: form.totalQuantity ? parseInt(form.totalQuantity) : null,
         remainingQuantity: form.remainingQuantity ? parseInt(form.remainingQuantity) : null,
         lowStockWarning: parseInt(form.lowStockWarning) || 3,
-        notes: form.notes || null,
-        barcode: form.barcode || null,
-        updateTime: db.serverDate()
+        notes: form.notes || '',
+        barcode: form.barcode || '',
+        createTime: this.data.isEdit ? undefined : new Date().toISOString(),
+        updateTime: new Date().toISOString()
       }
 
+      // 自动填充库存
+      if (!this.data.isEdit && !medicationData.remainingQuantity && medicationData.totalQuantity) {
+        medicationData.remainingQuantity = medicationData.totalQuantity
+      }
+
+      // 1. 先保存到本地
+      const app = getApp()
+      const medications = wx.getStorageSync('medications') || []
+
       if (this.data.isEdit) {
-        await db.collection('medications').doc(this.data.editId).update({
-          data: medicationData
-        })
-      } else {
-        medicationData.createTime = db.serverDate()
-        medicationData.updateTime = db.serverDate()
-        if (!medicationData.remainingQuantity && medicationData.totalQuantity) {
-          medicationData.remainingQuantity = medicationData.totalQuantity
+        const idx = medications.findIndex(m => m._id === this.data.editId || m.id === this.data.editId)
+        if (idx >= 0) {
+          medications[idx] = { ...medications[idx], ...medicationData }
         }
-        await db.collection('medications').add({
-          data: medicationData
-        })
+      } else {
+        medications.unshift(medicationData)
+      }
+      wx.setStorageSync('medications', medications)
+
+      // 2. 异步同步到云端
+      if (app.globalData && app.globalData.cloudReady) {
+        if (this.data.isEdit) {
+          app.pushToCloud({ type: 'update', collection: 'medications', docId: this.data.editId, data: medicationData }).catch(() => {})
+        } else {
+          app.pushToCloud({ type: 'add', collection: 'medications', data: medicationData }).catch(() => {})
+        }
       }
 
       wx.hideLoading()
-      wx.showToast({
-        title: '保存成功',
-        icon: 'success'
-      })
-
-      setTimeout(() => {
-        wx.navigateBack()
-      }, 1500)
+      wx.showToast({ title: '保存成功', icon: 'success' })
+      setTimeout(() => { wx.navigateBack() }, 1500)
     } catch (err) {
       console.error('[AddMedication] handleSave error:', err)
       wx.hideLoading()
-      wx.showToast({
-        title: '保存失败',
-        icon: 'none'
-      })
+      wx.showToast({ title: '保存失败', icon: 'none' })
     }
   }
 })

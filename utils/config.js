@@ -1,4 +1,7 @@
 module.exports = {
+  // 云开发环境ID（在微信开发者工具 → 云开发控制台查看）
+  CLOUD_ENV: 'medication-reminder-dev',
+
   // 订阅消息模板ID（微信公众平台配置）
   SUBSCRIBE_TEMPLATE_ID: 'So9QakVG08t0VhN3gMcUyU9P39dCWKq_rpWB9usWoqk',
 
